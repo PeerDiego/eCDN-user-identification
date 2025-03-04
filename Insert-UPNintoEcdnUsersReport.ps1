@@ -1,8 +1,31 @@
+<#
+.SYNOPSIS
+    This script reads a CSV file containing user Object IDs, retrieves their User Principal Names (UPNs) and display names from Azure AD, and exports the results to a new CSV file.
+
+.DESCRIPTION
+    The script takes an input CSV file with a column named 'Users' containing the Object IDs of users. It connects to Azure AD, retrieves the UPN and display name for each user, and adds these details to the CSV. The results are then exported to a specified output CSV file. Optionally, the results can also be output to the host.
+
+.PARAMETER InputCsvPath
+    The path to the input CSV file containing the user Object IDs.
+
+.PARAMETER OutputCsvPath
+    The path to the output CSV file where the results will be saved. Defaults to "output.csv".
+
+.PARAMETER AlsoOutputToHost
+    A switch parameter that, if specified, will also output the results to the host.
+
+.EXAMPLE
+    .\Insert-UPNintoEcdnUsersReport.ps1 -InputCsvPath "input.csv" -OutputCsvPath "output.csv" -AlsoOutputToHost
+
+.NOTES
+    The script requires the AzureAD module to be installed and the user to be connected to Azure AD.
+
+#>
 param (
     [Parameter(Mandatory = $true)]
-    [string]$InputCsvPath,
-    [string]$OutputCsvPath = "output.csv",
-    [switch]$AlsoOutputToHost
+    [string] $InputCsvPath,
+    [string] $OutputCsvPath = "output.csv",
+    [switch] $AlsoOutputToHost
 )
 
 # Define the GUID pattern
@@ -38,10 +61,6 @@ catch {
     exit 1
 }
 
-# Ditching this method for recreating the input CSV with the new columns
-# Create an array to hold the results
-# $results = @()
-
 # Create a hash table to cache user details
 $hashTable = @{}
 
@@ -57,6 +76,7 @@ foreach ($user in $users) {
     Write-Progress -Activity "Processing users" -Status "Processing user $currentUser of $totalUsers" -PercentComplete (($currentUser / $totalUsers) * 100)
 
     try {
+        # Get the user details
         $userDetails = if ($ObjectId -in $hashTable.Keys) {
             Write-Host "Using cached user details for $ObjectId" -f Yellow
             $hashTable[$ObjectId]
@@ -67,6 +87,7 @@ foreach ($user in $users) {
             Get-AzureADUser -Filter "UserPrincipalName eq '$ObjectId'" -ErrorAction SilentlyContinue
         }
         
+        # Add the UPN and Name columns to the user object
         if ($userDetails) {
             $user | Add-Member -MemberType NoteProperty -Name UPN -Value $userDetails.UserPrincipalName
             $user | Add-Member -MemberType NoteProperty -Name Name -Value $userDetails.DisplayName
@@ -78,34 +99,16 @@ foreach ($user in $users) {
         else {
             Write-Host "Invalid Object ID: $ObjectId" -f DarkGray
         }
-        # if ($userDetails) {
-        #     $results += [PSCustomObject]@{
-        #         Oid = $ObjectId
-        #         UPN = $userDetails.UserPrincipalName
-        #         Name = $userDetails.DisplayName
-        #     }
-        # } else {
-        #     $results += [PSCustomObject]@{
-        #         Oid = $ObjectId
-        #         UPN = "not found"
-        #         Name = "not found"
-        #     }
-        # }
     } catch {
         Write-Host "Failed to get user details for $ObjectId" -f Red
-        # $results += [PSCustomObject]@{
-        #     Oid = $ObjectId
-        #     UPN = ""
-        #     Name = ""
-        # }
     }
 }
 
-# Export the results to a new CSV
-# $results | Export-Csv -Path $OutputCsvPath -NoTypeInformation
-
+# Inserts the UPN and Name columns into the CSV
 $Properties = @("Users", "UPN", "Name") + ($users[0].PSObject.Properties.Name | Where-Object { $_ -notin @("Users", "UPN", "Name") })
 
+# Export the results to a CSV
+# Retry until the export is successful or user cancels
 while (1) {
     try {
         $users | Select-Object $Properties | Export-Csv -Path $OutputCsvPath -NoTypeInformation
