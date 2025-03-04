@@ -1,6 +1,6 @@
 # Insert UPN into eCDN Users Report
 
-This PowerShell script reads a CSV file containing user Object IDs, retrieves their User Principal Names (UPNs) and display names from Azure AD, and exports the results to a new CSV file.
+This PowerShell script reads the CSV file exported from the Microsoft eCDN analytics's users breakdown which contains user Object IDs, retrieves their User Principal Names (UPNs) and display names from Azure AD, and exports the results to a new CSV file.
 
 ## Description
 
